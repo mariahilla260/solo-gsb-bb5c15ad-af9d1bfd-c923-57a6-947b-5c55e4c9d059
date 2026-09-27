@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>骑马钉小册子拼版检查</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>骑马钉小册子拼版检查</h1>
+    <p>输入成品页数，自动补齐为 4 的倍数并生成拼版；支持单帖与分帖两种模式，可版位交换与编辑，实时校验重复页、缺页、正反配对异常及跨帖连续性，校验通过后可导出 CSV 或下载双面打样（独立 HTML，A4 横向、每张纸正反各一页、短边翻转镜像，含左右页码、空白版位、中央折线与四角对位标）。校验不通过时可「生成修复方案」：以服务端标准拼版为目标，按顺序列出交换 / 改值步骤（含版位、原值、目标值）并可一键应用；生成方案后再改动拼版会被拒绝应用。可选骑马钉爬移补偿：按单张纸厚度与补偿上限逐张计算补偿量，左版向右、右版向左（朝折线）移动，打样中仅页码内容随补偿平移。成品页需返工时，可在「补印」面板输入页码（如 2,5-7）生成补印清单，并下载仅含命中纸张的双面补印打样；也可输入「页码:份数」（如 2:5,7:3）按页份数核算生产单——同一纸张命中多页时按最大份数补印，逐页列出需求与随印超出份数，并汇总实体纸张总用量、下载与屏幕一致的 CSV。改版重排时可使用「印版复用」：把校验通过的拼版保存为本次比较基线（仅存于当前浏览器会话），重新生成或调整拼版后发起比较，服务端按印版面（正反面别、左右页码及空白版位、该面实际爬移量均相同，跨帖号与纸张序号、每旧面最多匹配一次）判定可复用旧版，并汇总复用、新制与旧面作废数量；任一方案未通过服务端校验时拒绝核算。</p>
+  </header>
+
+  <main>
+    <section class="card controls">
+      <div class="row">
+        <label for="pagesInput">成品页数</label>
+        <input id="pagesInput" type="number" min="1" max="500" value="8">
+        <div class="mode-group" role="group" aria-label="拼版模式">
+          <button id="singleModeBtn" class="mode active" type="button">单帖</button>
+          <button id="multiModeBtn" class="mode" type="button">分帖</button>
+        </div>
+        <label id="sigCapLabel" for="sigCapInput" hidden>每帖最多纸张数</label>
+        <input id="sigCapInput" type="number" min="1" max="8" value="2" hidden>
+        <span class="creep-toggle">
+          <input id="creepEnable" type="checkbox">
+          <label for="creepEnable">爬移补偿</label>
+        </span>
+        <label id="thicknessLabel" for="thicknessInput" hidden>纸张厚度(mm)</label>
+        <input id="thicknessInput" type="number" min="0.01" max="0.5" step="0.01" value="0.10" hidden>
+        <label id="creepCapLabel" for="creepCapInput" hidden>补偿上限(mm)</label>
+        <input id="creepCapInput" type="number" min="0" max="10" step="0.1" value="2" hidden>
+        <button id="generateBtn" class="primary">生成拼版</button>
+        <button id="resetBtn" disabled>重置</button>
+        <button id="repairPlanBtn" disabled>生成修复方案</button>
+        <span class="spacer"></span>
+        <div class="mode-group" role="group" aria-label="操作模式">
+          <button id="swapModeBtn" class="mode active" type="button">交换模式</button>
+          <button id="editModeBtn" class="mode" type="button">编辑模式</button>
+        </div>
+        <button id="exportBtn" class="primary" disabled>导出 CSV</button>
+        <button id="proofBtn" disabled>下载打样</button>
+      </div>
+      <p id="modeHint" class="hint"></p>
+      <p id="summary" class="summary"></p>
+    </section>
+
+    <div class="layout">
+      <section id="sheetsArea">
+        <p id="emptyTip" class="empty">
+          请输入成品页数并点击「生成拼版」。单帖模式下纸张按装订后的嵌套顺序预览：第 1 张为最外层，逐张向内套叠；分帖模式下按帖分组，每帖最多容纳所设纸张数对应的成品页。
+        </p>
+        <p id="nestTip" class="nest-tip" hidden>纸张按装订后的嵌套顺序排列（缩进表示套叠关系，第 1 张为最外层；分帖模式下缩进按帖内序号计算）：</p>
+        <div id="sheets"></div>
+      </section>
+
+      <div class="side-col">
+        <aside class="card errors-card">
+          <h2>校验结果</h2>
+          <div id="errors"><p class="muted">尚未生成拼版。</p></div>
+        </aside>
+
+        <aside class="card repair-card" id="repairCard" hidden>
+          <h2>修复方案</h2>
+          <div id="repairInfo"></div>
+          <ol id="repairSteps" class="repair-steps"></ol>
+          <div class="repair-actions">
+            <button id="applyRepairBtn" class="primary" type="button">一键应用</button>
+            <button id="discardRepairBtn" type="button">放弃方案</button>
+          </div>
+        </aside>
+
+        <aside class="card reprint-card" id="reprintCard">
+          <h2>补印</h2>
+          <p class="hint">输入需返工的成品页码，支持逗号与连续区间（如 2,5-7）；按版位反查实体纸张，可下载仅含命中纸张的双面补印打样。</p>
+          <div class="reprint-controls">
+            <input id="reprintInput" type="text" placeholder="如 2,5-7" autocomplete="off">
+            <button id="reprintPlanBtn" type="button">生成补印清单</button>
+            <button id="reprintProofBtn" type="button" disabled>下载补印打样</button>
+          </div>
+          <div id="reprintInfo"><p class="muted">请先生成拼版。</p></div>
+          <ul id="reprintList" class="reprint-list"></ul>
+
+          <h3 class="reprint-sub">按页份数核算</h3>
+          <p class="hint">输入「页码:份数」的逗号分隔项（如 2:5,7:3），页码不可重复、份数须为正整数；同一纸张命中多个返工页时按各页需求的最大值补印，并列出每页需求与随印超出份数。</p>
+          <div class="reprint-controls">
+            <input id="reprintRunInput" type="text" placeholder="如 2:5,7:3" autocomplete="off">
+            <button id="reprintRunBtn" type="button">生成生产单</button>
+            <button id="reprintRunCsvBtn" type="button" disabled>下载生产单 CSV</button>
+          </div>
+          <div id="reprintRunInfo"></div>
+          <ul id="reprintRunList" class="reprint-list"></ul>
+        </aside>
+
+        <aside class="card reuse-card" id="reuseCard">
+          <h2>改版印版复用</h2>
+          <p class="hint">把一份校验通过的拼版保存为本次比较基线（仅保存在当前浏览器会话，关闭标签页即清除）；改版重排后对当前方案发起比较：服务端按印版面匹配——正反面别、左右页码及空白版位、该面实际爬移量均相同才可复用，可跨帖号与纸张序号查找，但每个旧面最多匹配一个新面。任一方案未通过服务端校验时拒绝核算。</p>
+          <div class="reuse-controls">
+            <button id="saveBaselineBtn" type="button" disabled>保存为比较基线</button>
+            <button id="compareReuseBtn" class="primary" type="button" disabled>与基线比较</button>
+            <button id="clearBaselineBtn" type="button" disabled>清除基线</button>
+          </div>
+          <div id="baselineInfo"></div>
+          <div id="reuseResult"></div>
+          <ul id="reuseList" class="reprint-list"></ul>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
