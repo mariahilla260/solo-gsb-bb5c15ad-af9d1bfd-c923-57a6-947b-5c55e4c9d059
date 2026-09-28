@@ -17,6 +17,11 @@ const {
   buildReprintRunCsv,
   comparePlateReuse,
 } = require('./src/imposition');
+const {
+  computeDefaultDemand,
+  planStockCutting,
+  buildStockCsv,
+} = require('./src/stock-cutting');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -196,6 +201,48 @@ app.post('/api/reuse/compare', (req, res) => {
     return res.status(400).json({ error: result.error, errors: result.errors });
   }
   res.json(result);
+});
+
+/** 默认需求量：实体纸张数 × 印量（1~10000）；拼版非法或印量越界返回 400 */
+app.post('/api/stock/default-demand', (req, res) => {
+  const body = req.body || {};
+  const demand = computeDefaultDemand(body.state, body.copies);
+  if (demand === null) {
+    return res.status(400).json({ error: '拼版数据格式不正确，或印量必须是 1~10000 的整数' });
+  }
+  res.json({ demand });
+});
+
+/** 原纸开料选配：当前拼版须通过校验；枚举两种正交摆放（仅折线平行纸纹可用），精确选取最优组合 */
+app.post('/api/stock/plan', (req, res) => {
+  const body = req.body || {};
+  const plan = planStockCutting(body.state, body.params);
+  if (!plan) {
+    return res.status(400).json({ error: '拼版数据格式不正确' });
+  }
+  if (plan.error) {
+    return res.status(400).json({ error: plan.error, errors: plan.errors });
+  }
+  res.json(plan);
+});
+
+/** 开料选配 CSV：内容与屏幕结果一致；拼版有错或输入非法时拒绝下载 */
+app.post('/api/stock/csv', (req, res) => {
+  const body = req.body || {};
+  const result = buildStockCsv(body.state, body.params);
+  if (!result) {
+    return res.status(400).json({ error: '拼版数据格式不正确' });
+  }
+  if (result.error) {
+    return res.status(400).json({ error: result.error, errors: result.errors });
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  const st = body.state || {};
+  const filename = Array.isArray(st.signatures)
+    ? `stock-cutting-${st.totalPages}p-${st.signatureCount}sig.csv`
+    : `stock-cutting-${st.totalPages}p.csv`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(result.csv);
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

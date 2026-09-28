@@ -385,3 +385,110 @@ button.primary:hover:not(:disabled) { background: var(--accent-dark); }
 .reuse-badge.reuse { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
 .reuse-badge.new { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
 .reuse-source { color: var(--muted); }
+
+/* 原纸开料选配面板 */
+.stock-card { margin-top: 18px; }
+.stock-card h2 { margin: 0 0 6px; font-size: 17px; }
+.stock-card .hint { margin: 0 0 12px; line-height: 1.7; }
+.stock-form {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+.stock-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.stock-row label { font-weight: 600; font-size: 13px; }
+.stock-row input[type="number"],
+.stock-row select {
+  width: 88px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+.stock-row input.dim { width: 92px; }
+.stock-row input.smallnum { width: 76px; }
+.stock-row button { margin-left: 4px; }
+.stock-table-wrap { margin-top: 12px; overflow-x: auto; }
+.stock-input-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 13px;
+}
+.stock-input-table th,
+.stock-input-table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.stock-input-table th { background: #eef2f7; font-weight: 600; }
+.stock-input-table td.idx { color: var(--muted); font-weight: 600; }
+.stock-input-table input[type="text"],
+.stock-input-table input[type="number"],
+.stock-input-table select {
+  width: 100%;
+  min-width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 13px;
+}
+.stock-input-table input.code { min-width: 96px; }
+.stock-input-table td.col-op { border: none; background: transparent; width: 42px; }
+.stock-input-table .del-paper { padding: 4px 10px; font-size: 12px; }
+.stock-row-actions { margin-top: 10px; }
+#stockInfo { font-size: 13px; margin-top: 10px; }
+#stockInfo p { margin: 0 0 8px; }
+.stock-summary {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.stock-summary.ok { color: #14532d; background: var(--ok-bg); border: 1px solid #bbf7d0; }
+.stock-summary.no { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+.stock-summary .total-price { font-weight: 700; }
+.stock-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.stock-result-table th,
+.stock-result-table td {
+  border: 1px solid var(--border);
+  padding: 7px 9px;
+  text-align: center;
+}
+.stock-result-table th { background: #eef2f7; font-weight: 600; }
+.stock-result-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.stock-result-table tr.chosen { background: #f0fdf4; }
+.stock-result-table tr.chosen td:first-child { border-left: 3px solid var(--ok); }
+.stock-result-table tr.unfit { color: var(--muted); background: #fafafa; }
+.place-detail { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.place-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+.stock-warn {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 10px;
+}

@@ -40,6 +40,19 @@ const els = {
   baselineInfo: document.getElementById('baselineInfo'),
   reuseResult: document.getElementById('reuseResult'),
   reuseList: document.getElementById('reuseList'),
+  copiesInput: document.getElementById('copiesInput'),
+  demandInput: document.getElementById('demandInput'),
+  sheetWidthInput: document.getElementById('sheetWidthInput'),
+  sheetHeightInput: document.getElementById('sheetHeightInput'),
+  foldDirInput: document.getElementById('foldDirInput'),
+  trimInput: document.getElementById('trimInput'),
+  kerfInput: document.getElementById('kerfInput'),
+  stockCalcBtn: document.getElementById('stockCalcBtn'),
+  stockCsvBtn: document.getElementById('stockCsvBtn'),
+  addPaperBtn: document.getElementById('addPaperBtn'),
+  stockPaperRows: document.getElementById('stockPaperRows'),
+  stockInfo: document.getElementById('stockInfo'),
+  stockResult: document.getElementById('stockResult'),
   summary: document.getElementById('summary'),
   sheets: document.getElementById('sheets'),
   errors: document.getElementById('errors'),
@@ -132,6 +145,7 @@ function setLayout(next) {
     els.proofBtn.disabled = true;
     els.errors.innerHTML = '<p class="muted">已切换拼版模式，请重新点击「生成拼版」。</p>';
     refreshReprint();
+    refreshStock();
   }
 }
 
@@ -164,6 +178,7 @@ async function generate() {
     state = data;
     original = structuredClone(data);
     selected = null;
+    demandTouched = false; // 新拼版恢复需求量默认值
     discardRepairPlan();
     render();
     scheduleValidate();
@@ -176,6 +191,7 @@ function reset() {
   if (!original) return;
   state = structuredClone(original);
   selected = null;
+  demandTouched = false; // 重置拼版时恢复需求量默认值
   discardRepairPlan();
   render();
   scheduleValidate();
@@ -219,6 +235,8 @@ function render() {
   updateModeUI();
   refreshReprintRun(); // 拼版内容可能已变化：旧生产单立即失效
   refreshReuse();
+  syncDefaultDemand(true); // 新拼版：需求量重置为实体纸张数×印量的默认值
+  refreshStock(); // 拼版变化：旧选配结果立即失效
 }
 
 function renderSignature(g) {
@@ -445,6 +463,7 @@ async function validateNow() {
     els.proofBtn.disabled = true;
   }
   refreshReprint();
+  refreshStock(); // 版位交换 / 编辑后拼版内容变化：旧选配结果立即失效
 }
 
 function renderErrors(result) {
@@ -1092,6 +1111,293 @@ function downloadProof() {
   return downloadResult('/api/export/proof', filename, '打样下载失败');
 }
 
+/* ---------- 原纸开料选配 ---------- */
+
+const MAX_STOCK_KINDS = 6;
+const DIRECTION_TEXT = { horizontal: '横向', vertical: '竖向' };
+
+let stockData = null; // 最近一次选配结果（含输入快照），输入或拼版变化即置空
+let demandTouched = false; // 用户是否手动改过需求量（改过则不自动覆盖）
+
+/** 读取原纸录入表格（保持表格行序；排序与编号唯一性由服务端校验） */
+function readPaperInputs() {
+  const rows = [];
+  for (const tr of els.stockPaperRows.querySelectorAll('tr')) {
+    rows.push({
+      code: tr.querySelector('.f-code').value.trim(),
+      width: tr.querySelector('.f-width').value,
+      height: tr.querySelector('.f-height').value,
+      grain: tr.querySelector('.f-grain').value,
+      stock: tr.querySelector('.f-stock').value,
+      price: tr.querySelector('.f-price').value,
+    });
+  }
+  return rows;
+}
+
+/** 收集选配入参（数字转换由服务端严格校验，此处只做透传） */
+function buildStockParams() {
+  return {
+    demand: Number(els.demandInput.value),
+    sheetWidth: Number(els.sheetWidthInput.value),
+    sheetHeight: Number(els.sheetHeightInput.value),
+    foldDirection: els.foldDirInput.value,
+    trim: Number(els.trimInput.value),
+    kerf: Number(els.kerfInput.value),
+    papers: readPaperInputs().map((r) => ({
+      code: r.code,
+      width: Number(r.width),
+      height: Number(r.height),
+      grain: r.grain,
+      stock: Number(r.stock),
+      price: Number(r.price),
+    })),
+  };
+}
+
+function stockInputSnapshot() {
+  return JSON.stringify({ params: buildStockParams(), copies: els.copiesInput.value });
+}
+
+/** 实体纸张数 × 印量（印量非法时返回 null） */
+function defaultDemandValue() {
+  if (!state) return null;
+  const copies = Number(els.copiesInput.value);
+  if (!Number.isInteger(copies) || copies < 1 || copies > 10000) return null;
+  return state.sheetCount * copies;
+}
+
+/** 拼版生成 / 印量变化时填入默认需求量；用户已手动改过则保留其输入 */
+function syncDefaultDemand(force) {
+  const d = defaultDemandValue();
+  if (d === null) return;
+  if (force || !demandTouched) els.demandInput.value = d;
+}
+
+function addPaperRow(prefill) {
+  const idx = els.stockPaperRows.querySelectorAll('tr').length;
+  if (idx >= MAX_STOCK_KINDS) return;
+  const defaults = [
+    { code: 'A', width: '880', height: '1230', grain: 'horizontal', stock: '100', price: '5000' },
+    { code: 'B', width: '787', height: '1092', grain: 'vertical', stock: '100', price: '4000' },
+  ];
+  const d = prefill || defaults[idx] || {
+    code: String.fromCharCode(65 + idx), width: '880', height: '1230',
+    grain: 'horizontal', stock: '100', price: '5000',
+  };
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td class="idx"></td>` +
+    `<td><input class="f-code code" type="text" maxlength="20" placeholder="如 ${d.code}"></td>` +
+    `<td><input class="f-width" type="number" min="1" value="${d.width}"></td>` +
+    `<td><input class="f-height" type="number" min="1" value="${d.height}"></td>` +
+    `<td><select class="f-grain"><option value="horizontal">横向</option><option value="vertical">竖向</option></select></td>` +
+    `<td><input class="f-stock" type="number" min="0" max="1000" value="${d.stock}"></td>` +
+    `<td><input class="f-price" type="number" min="1" value="${d.price}"></td>` +
+    `<td class="col-op"><button type="button" class="del-paper">删除</button></td>`;
+  tr.querySelector('.f-code').value = d.code;
+  tr.querySelector('.f-grain').value = d.grain;
+  tr.querySelector('.del-paper').addEventListener('click', () => {
+    tr.remove();
+    renumberPaperRows();
+    invalidateStock();
+  });
+  tr.querySelectorAll('input,select').forEach((el) =>
+    el.addEventListener('input', invalidateStock)
+  );
+  els.stockPaperRows.appendChild(tr);
+  renumberPaperRows();
+}
+
+function renumberPaperRows() {
+  els.stockPaperRows.querySelectorAll('tr').forEach((tr, i) => {
+    tr.querySelector('.idx').textContent = i + 1;
+  });
+  els.addPaperBtn.disabled = els.stockPaperRows.querySelectorAll('tr').length >= MAX_STOCK_KINDS;
+}
+
+/** 任一输入变化：旧选配结果立即失效（拼版变化由 refreshStock 处理） */
+function invalidateStock() {
+  if (stockData) {
+    stockData = null;
+    els.stockCsvBtn.disabled = true;
+    renderStockStale();
+  }
+}
+
+function renderStockStale() {
+  els.stockResult.innerHTML = '';
+  els.stockInfo.innerHTML = '<p class="muted">输入或拼版已变化，旧选配结果已失效，请重新点击「计算选配」。</p>';
+}
+
+function renderStockMessage(text, cls) {
+  els.stockInfo.innerHTML = '';
+  els.stockResult.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = cls || 'reprint-err';
+  p.textContent = text;
+  els.stockInfo.appendChild(p);
+}
+
+async function calcStock() {
+  if (!state) {
+    renderStockMessage('请先生成拼版。', 'muted');
+    return;
+  }
+  try {
+    const data = await api('/api/stock/plan', { state, params: buildStockParams() });
+    stockData = {
+      plan: data,
+      baseStateJson: JSON.stringify(state),
+      baseInput: stockInputSnapshot(),
+    };
+    renderStockResult(data);
+    els.stockCsvBtn.disabled = false; // 无解方案也可导出含原因说明的 CSV
+  } catch (e) {
+    stockData = null;
+    els.stockCsvBtn.disabled = true;
+    renderStockMessage(e.message, 'reprint-err');
+  }
+}
+
+function fenText(fen) {
+  return `${fen} 分（合 ¥${(fen / 100).toFixed(2)}）`;
+}
+
+/** 渲染选配结果：参数校验信息 + 各规格摆放 / 出数 / 领用量 + 总价与超印量 */
+function renderStockResult(plan) {
+  els.stockInfo.innerHTML = '';
+  els.stockResult.innerHTML = '';
+
+  const info = document.createElement('p');
+  info.className = 'muted';
+  info.textContent =
+    `需求 ${plan.demand} 张 · 展开纸张 ${plan.sheetWidth}×${plan.sheetHeight} mm` +
+    ` · 折线${DIRECTION_TEXT[plan.foldDirection]} · 修边 ${plan.trim} mm · 刀缝 ${plan.kerf} mm` +
+    ` · 当前拼版实体纸张 ${plan.entitySheets} 张`;
+  els.stockInfo.appendChild(info);
+
+  const table = document.createElement('table');
+  table.className = 'stock-result-table';
+  table.innerHTML =
+    '<thead><tr>' +
+    '<th>编号</th><th>原纸规格（mm）</th><th>纸纹</th><th>库存</th><th>单价</th>' +
+    '<th>允许摆放（折线 ∥ 纸纹）</th><th>单张出数</th><th>领用量（张）</th>' +
+    '<th>本规格出数</th><th>金额（分）</th>' +
+    '</tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  for (const p of plan.papers) {
+    const layout = p.layouts.find((l) => l.rotation === p.usableRotation);
+    const tr = document.createElement('tr');
+    if (plan.feasible && p.take > 0) tr.className = 'chosen';
+    if (p.maxOut === 0) tr.className = 'unfit';
+
+    const td = (text, cls) => {
+      const cell = document.createElement('td');
+      if (cls) cell.className = cls;
+      cell.textContent = text;
+      return cell;
+    };
+    tr.appendChild(td(p.code));
+    tr.appendChild(td(`${p.width}×${p.height}`));
+    tr.appendChild(td(DIRECTION_TEXT[p.grain]));
+    tr.appendChild(td(String(p.stock)));
+    tr.appendChild(td(`${p.price}`, 'num'));
+
+    const placeTd = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'place-badge';
+    badge.textContent = layout.rotation === '0deg' ? '原样 0°' : '旋转 90°';
+    const detail = document.createElement('span');
+    detail.className = 'place-detail';
+    detail.textContent = p.maxOut === 0
+      ? `尺寸不足（${layout.columns}列×${layout.rows}行，出数 0）`
+      : `${layout.columns} 列 × ${layout.rows} 行 · 折线${DIRECTION_TEXT[layout.foldAxis]} ∥ 纸纹${DIRECTION_TEXT[layout.grainAxis]}`;
+    placeTd.append(badge, detail);
+    tr.appendChild(placeTd);
+
+    tr.appendChild(td(String(p.maxOut), 'num'));
+    tr.appendChild(td(plan.feasible ? String(p.take) : '—', 'num'));
+    tr.appendChild(td(plan.feasible ? String(p.output) : '—', 'num'));
+    tr.appendChild(td(plan.feasible ? String(p.amount) : '—', 'num'));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  els.stockResult.appendChild(table);
+
+  const summary = document.createElement('div');
+  summary.className = 'stock-summary ' + (plan.feasible ? 'ok' : 'no');
+  if (plan.feasible) {
+    const s = plan.selection;
+    summary.innerHTML =
+      `<div class="total-price">总价：${fenText(s.totalPrice)}</div>` +
+      `<div>领用纸种 ${plan.papers.filter((p) => p.take > 0).length} 种、实体原纸 ${s.totalTake} 张` +
+      ` · 总出数 ${s.totalOutput} 张 · <strong>超印 ${s.overrun} 张</strong></div>`;
+  } else {
+    summary.textContent =
+      plan.reason === 'size_mismatch'
+        ? '无可用方案：尺寸不适配——所有原纸在允许摆放（折线平行纸纹）下均无法排出至少一张，请检查展开尺寸、修边量或更换更大规格原纸。'
+        : '无可用方案：库存不足——现有各原纸按库存封顶后的总出数无法覆盖需求，请补充库存或增加原纸种类。';
+  }
+  els.stockResult.appendChild(summary);
+}
+
+/** 拼版变化后同步选配区：计算按钮可用性；已有结果基于的拼版或输入变化时立即失效 */
+function refreshStock() {
+  els.stockCalcBtn.disabled = !state;
+  if (!state) {
+    stockData = null;
+    els.stockCsvBtn.disabled = true;
+    els.stockInfo.innerHTML = '<p class="muted">请先生成拼版。</p>';
+    els.stockResult.innerHTML = '';
+    return;
+  }
+  if (!stockData) return;
+  if (
+    JSON.stringify(state) !== stockData.baseStateJson ||
+    stockInputSnapshot() !== stockData.baseInput
+  ) {
+    stockData = null;
+    els.stockCsvBtn.disabled = true;
+    renderStockStale();
+  }
+}
+
+async function downloadStockCsv() {
+  if (!state || !stockData) return;
+  if (
+    JSON.stringify(state) !== stockData.baseStateJson ||
+    stockInputSnapshot() !== stockData.baseInput
+  ) {
+    refreshStock();
+    alert('拼版或输入已变化，旧选配结果已失效，请重新计算选配。');
+    return;
+  }
+  const res = await fetch('/api/stock/csv', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state, params: buildStockParams() }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || '选配 CSV 下载失败');
+    refreshStock();
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = layout === 'multi'
+    ? `stock-cutting-${state.totalPages}p-${state.signatureCount}sig.csv`
+    : `stock-cutting-${state.totalPages}p.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /* ---------- 事件绑定 ---------- */
 
 els.generateBtn.addEventListener('click', generate);
@@ -1163,3 +1469,28 @@ updateModeUI();
 loadBaseline();
 renderBaselineInfo();
 refreshReuse();
+
+// 原纸开料选配：初始化两行原纸，绑定事件
+addPaperRow();
+addPaperRow();
+els.stockCalcBtn.addEventListener('click', calcStock);
+els.stockCsvBtn.addEventListener('click', downloadStockCsv);
+els.addPaperBtn.addEventListener('click', () => addPaperRow());
+els.copiesInput.addEventListener('input', () => {
+  syncDefaultDemand(false);
+  invalidateStock();
+});
+els.demandInput.addEventListener('input', () => {
+  demandTouched = true;
+  invalidateStock();
+});
+[
+  els.sheetWidthInput,
+  els.sheetHeightInput,
+  els.foldDirInput,
+  els.trimInput,
+  els.kerfInput,
+].forEach((el) => el.addEventListener('input', invalidateStock));
+els.foldDirInput.addEventListener('change', invalidateStock);
+refreshStock();
+syncDefaultDemand(true);

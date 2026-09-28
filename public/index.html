@@ -9,7 +9,7 @@
 <body>
   <header class="top">
     <h1>骑马钉小册子拼版检查</h1>
-    <p>输入成品页数，自动补齐为 4 的倍数并生成拼版；支持单帖与分帖两种模式，可版位交换与编辑，实时校验重复页、缺页、正反配对异常及跨帖连续性，校验通过后可导出 CSV 或下载双面打样（独立 HTML，A4 横向、每张纸正反各一页、短边翻转镜像，含左右页码、空白版位、中央折线与四角对位标）。校验不通过时可「生成修复方案」：以服务端标准拼版为目标，按顺序列出交换 / 改值步骤（含版位、原值、目标值）并可一键应用；生成方案后再改动拼版会被拒绝应用。可选骑马钉爬移补偿：按单张纸厚度与补偿上限逐张计算补偿量，左版向右、右版向左（朝折线）移动，打样中仅页码内容随补偿平移。成品页需返工时，可在「补印」面板输入页码（如 2,5-7）生成补印清单，并下载仅含命中纸张的双面补印打样；也可输入「页码:份数」（如 2:5,7:3）按页份数核算生产单——同一纸张命中多页时按最大份数补印，逐页列出需求与随印超出份数，并汇总实体纸张总用量、下载与屏幕一致的 CSV。改版重排时可使用「印版复用」：把校验通过的拼版保存为本次比较基线（仅存于当前浏览器会话），重新生成或调整拼版后发起比较，服务端按印版面（正反面别、左右页码及空白版位、该面实际爬移量均相同，跨帖号与纸张序号、每旧面最多匹配一次）判定可复用旧版，并汇总复用、新制与旧面作废数量；任一方案未通过服务端校验时拒绝核算。</p>
+    <p>输入成品页数，自动补齐为 4 的倍数并生成拼版；支持单帖与分帖两种模式，可版位交换与编辑，实时校验重复页、缺页、正反配对异常及跨帖连续性，校验通过后可导出 CSV 或下载双面打样（独立 HTML，A4 横向、每张纸正反各一页、短边翻转镜像，含左右页码、空白版位、中央折线与四角对位标）。校验不通过时可「生成修复方案」：以服务端标准拼版为目标，按顺序列出交换 / 改值步骤（含版位、原值、目标值）并可一键应用；生成方案后再改动拼版会被拒绝应用。可选骑马钉爬移补偿：按单张纸厚度与补偿上限逐张计算补偿量，左版向右、右版向左（朝折线）移动，打样中仅页码内容随补偿平移。成品页需返工时，可在「补印」面板输入页码（如 2,5-7）生成补印清单，并下载仅含命中纸张的双面补印打样；也可输入「页码:份数」（如 2:5,7:3）按页份数核算生产单——同一纸张命中多页时按最大份数补印，逐页列出需求与随印超出份数，并汇总实体纸张总用量、下载与屏幕一致的 CSV。改版重排时可使用「印版复用」：把校验通过的拼版保存为本次比较基线（仅存于当前浏览器会话），重新生成或调整拼版后发起比较，服务端按印版面（正反面别、左右页码及空白版位、该面实际爬移量均相同，跨帖号与纸张序号、每旧面最多匹配一次）判定可复用旧版，并汇总复用、新制与旧面作废数量；任一方案未通过服务端校验时拒绝核算。此外提供「原纸开料选配」：需求量默认按实体纸张数 × 印量填入（1～10000 张，可改），录入展开纸张宽高、折线方向、统一修边量与刀缝及 1～6 种原纸（编号、宽高、纸纹、库存、单价分），服务端枚举两种正交摆放、仅允许折线平行纸纹，扣四边修边并计入相邻刀缝，按整行整列计算每种原纸最大出数，精确选取不超库存且覆盖需求的组合（先总价、再超印、再编号升序用量序列字典序），无解时说明库存不足或尺寸不适配，页面列出各规格摆放、出数、领用量及总价与超印量并可导出同内容 CSV；非法输入或拼版有错拒绝计算，输入或拼版变化使旧结果失效。</p>
   </header>
 
   <main>
@@ -107,6 +107,59 @@
         </aside>
       </div>
     </div>
+
+    <section class="card stock-card" id="stockCard">
+      <h2>原纸开料选配</h2>
+      <p class="hint">基于当前校验通过的拼版选配原纸：需求量默认按「实体纸张数 × 印量」填入（可改，1～10000 张）；填写展开纸张宽高（整数毫米）、折线方向、统一修边量（四边各扣一次）与相邻刀缝；再录入 1～6 种原纸的编号、宽高、纸纹方向、库存张数与单价（分）。服务端对每种原纸枚举原样与旋转 90° 两种正交摆放，<strong>仅允许折线平行纸纹</strong>的摆放，扣除四边修边、计入相邻刀缝后按整行整列计算最大出数，精确选取<strong>不超库存</strong>且覆盖需求的组合：先总价最低、再超印最少、仍并列按编号升序的领用量序列取字典序最小者。拼版或任一输入变化后旧结果立即失效。</p>
+
+      <div class="stock-form">
+        <div class="stock-row">
+          <label for="copiesInput">印量</label>
+          <input id="copiesInput" type="number" min="1" max="10000" value="1">
+          <label for="demandInput">需求量（张）</label>
+          <input id="demandInput" type="number" min="1" max="10000" placeholder="实体纸张数×印量">
+          <label for="sheetWidthInput">展开宽（mm）</label>
+          <input id="sheetWidthInput" class="dim" type="number" min="1" value="420">
+          <label for="sheetHeightInput">展开高（mm）</label>
+          <input id="sheetHeightInput" class="dim" type="number" min="1" value="297">
+          <label for="foldDirInput">折线方向</label>
+          <select id="foldDirInput">
+            <option value="vertical" selected>竖向</option>
+            <option value="horizontal">横向</option>
+          </select>
+          <label for="trimInput">修边量（mm）</label>
+          <input id="trimInput" class="smallnum" type="number" min="0" value="3">
+          <label for="kerfInput">刀缝（mm）</label>
+          <input id="kerfInput" class="smallnum" type="number" min="0" value="3">
+          <button id="stockCalcBtn" class="primary" type="button" disabled>计算选配</button>
+          <button id="stockCsvBtn" type="button" disabled>导出 CSV</button>
+        </div>
+
+        <div class="stock-table-wrap">
+          <table class="stock-input-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>编号</th>
+                <th>宽（mm）</th>
+                <th>高（mm）</th>
+                <th>纸纹方向</th>
+                <th>库存（张）</th>
+                <th>单价（分）</th>
+                <th class="col-op"></th>
+              </tr>
+            </thead>
+            <tbody id="stockPaperRows"></tbody>
+          </table>
+        </div>
+        <div class="stock-row-actions">
+          <button id="addPaperBtn" type="button">＋ 增加原纸（最多 6 种）</button>
+        </div>
+      </div>
+
+      <div id="stockInfo"></div>
+      <div id="stockResult"></div>
+    </section>
   </main>
 
   <script src="app.js"></script>

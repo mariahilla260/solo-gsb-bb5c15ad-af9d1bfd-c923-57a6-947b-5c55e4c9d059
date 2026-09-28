@@ -1344,4 +1344,5 @@ module.exports = {
   planReprintRun,
   buildReprintRunCsv,
   comparePlateReuse,
+  summarizeErrors,
 };
