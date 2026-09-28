@@ -385,3 +385,90 @@ button.primary:hover:not(:disabled) { background: var(--accent-dark); }
 .reuse-badge.reuse { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
 .reuse-badge.new { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
 .reuse-source { color: var(--muted); }
+
+/* 原纸开料选配面板 */
+.cutting-card { margin-top: 18px; }
+.cutting-card h2 { margin: 0 0 6px; font-size: 16px; }
+.cutting-card .hint { margin: 0 0 12px; }
+.cutting-card h3 { margin: 0; font-size: 14px; }
+.cutting-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.cutting-field { display: flex; flex-direction: column; gap: 4px; }
+.cutting-field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.cutting-field input,
+.cutting-field select {
+  width: 150px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+.cutting-stock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.cutting-stock-head button { padding: 6px 12px; font-size: 13px; }
+.cutting-table-wrap { overflow-x: auto; }
+.cutting-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cutting-table th,
+.cutting-table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.cutting-table th { background: #f1f5f9; font-size: 12px; color: var(--muted); }
+.cutting-table input,
+.cutting-table select {
+  width: 100%;
+  min-width: 90px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 13px;
+}
+.cutting-table .cut-del { padding: 4px 10px; font-size: 12px; }
+.cutting-actions { display: flex; gap: 8px; margin: 12px 0 10px; }
+#cutInfo { font-size: 13px; }
+#cutInfo p { margin: 0 0 8px; }
+.cut-head {
+  margin: 4px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cut-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.cut-result-table th,
+.cut-result-table td {
+  border: 1px solid var(--border);
+  padding: 7px 9px;
+  text-align: left;
+  white-space: nowrap;
+}
+.cut-result-table th { background: #f1f5f9; font-size: 12px; color: var(--muted); }
+.cut-result-table tr.cut-unusable td { color: var(--muted); background: #fafafa; }
+.cut-summary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 9px 12px;
+}

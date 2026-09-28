@@ -9,7 +9,7 @@
 <body>
   <header class="top">
     <h1>骑马钉小册子拼版检查</h1>
-    <p>输入成品页数，自动补齐为 4 的倍数并生成拼版；支持单帖与分帖两种模式，可版位交换与编辑，实时校验重复页、缺页、正反配对异常及跨帖连续性，校验通过后可导出 CSV 或下载双面打样（独立 HTML，A4 横向、每张纸正反各一页、短边翻转镜像，含左右页码、空白版位、中央折线与四角对位标）。校验不通过时可「生成修复方案」：以服务端标准拼版为目标，按顺序列出交换 / 改值步骤（含版位、原值、目标值）并可一键应用；生成方案后再改动拼版会被拒绝应用。可选骑马钉爬移补偿：按单张纸厚度与补偿上限逐张计算补偿量，左版向右、右版向左（朝折线）移动，打样中仅页码内容随补偿平移。成品页需返工时，可在「补印」面板输入页码（如 2,5-7）生成补印清单，并下载仅含命中纸张的双面补印打样；也可输入「页码:份数」（如 2:5,7:3）按页份数核算生产单——同一纸张命中多页时按最大份数补印，逐页列出需求与随印超出份数，并汇总实体纸张总用量、下载与屏幕一致的 CSV。改版重排时可使用「印版复用」：把校验通过的拼版保存为本次比较基线（仅存于当前浏览器会话），重新生成或调整拼版后发起比较，服务端按印版面（正反面别、左右页码及空白版位、该面实际爬移量均相同，跨帖号与纸张序号、每旧面最多匹配一次）判定可复用旧版，并汇总复用、新制与旧面作废数量；任一方案未通过服务端校验时拒绝核算。</p>
+    <p>输入成品页数，自动补齐为 4 的倍数并生成拼版；支持单帖与分帖两种模式，可版位交换与编辑，实时校验重复页、缺页、正反配对异常及跨帖连续性，校验通过后可导出 CSV 或下载双面打样（独立 HTML，A4 横向、每张纸正反各一页、短边翻转镜像，含左右页码、空白版位、中央折线与四角对位标）。校验不通过时可「生成修复方案」：以服务端标准拼版为目标，按顺序列出交换 / 改值步骤（含版位、原值、目标值）并可一键应用；生成方案后再改动拼版会被拒绝应用。可选骑马钉爬移补偿：按单张纸厚度与补偿上限逐张计算补偿量，左版向右、右版向左（朝折线）移动，打样中仅页码内容随补偿平移。成品页需返工时，可在「补印」面板输入页码（如 2,5-7）生成补印清单，并下载仅含命中纸张的双面补印打样；也可输入「页码:份数」（如 2:5,7:3）按页份数核算生产单——同一纸张命中多页时按最大份数补印，逐页列出需求与随印超出份数，并汇总实体纸张总用量、下载与屏幕一致的 CSV。改版重排时可使用「印版复用」：把校验通过的拼版保存为本次比较基线（仅存于当前浏览器会话），重新生成或调整拼版后发起比较，服务端按印版面（正反面别、左右页码及空白版位、该面实际爬移量均相同，跨帖号与纸张序号、每旧面最多匹配一次）判定可复用旧版，并汇总复用、新制与旧面作废数量；任一方案未通过服务端校验时拒绝核算。拼版校验通过后还可使用「原纸开料选配」：输入需求量（默认实体纸张数×印量）、展开纸张宽高与折线方向、统一修边量及刀缝，并录入 1～6 种原纸的编号、宽高、纸纹方向、库存与单价，服务端枚举两种正交摆放（仅折线平行纸纹），扣除四边修边、计入相邻刀缝按整行整列计算每张出数，精确选取不超库存且覆盖需求的最低总价组合（再比超印、编号升序列用量字典序），列出各规格摆放、出数、领用量、金额与总价、超印量，并可导出同内容 CSV。</p>
   </header>
 
   <main>
@@ -107,6 +107,72 @@
         </aside>
       </div>
     </div>
+
+    <section class="card cutting-card" id="cuttingCard">
+      <h2>原纸开料选配</h2>
+      <p class="hint">拼版校验通过后，按当前拼版实体纸张数与印量核算原纸选配：服务端对每种原纸枚举两种正交摆放，仅允许折线平行纸纹；四边扣除统一修边量、相邻件计入刀缝，按整行整列计算每张最大出数；在不超库存的前提下选取总出数覆盖需求的组合，先最小化总价，再最小化超印张数，仍并列时按编号升序的领用量序列取字典序最小者。输入或拼版变化后旧选配结果立即失效。</p>
+      <div class="cutting-controls">
+        <div class="cutting-field">
+          <label for="cutDemand">需求量(张)</label>
+          <input id="cutDemand" type="number" min="1" max="10000" placeholder="默认=实体纸张数×印量">
+        </div>
+        <div class="cutting-field">
+          <label for="cutPrintRun">印量</label>
+          <input id="cutPrintRun" type="number" min="1" max="10000" value="1">
+        </div>
+        <div class="cutting-field">
+          <label for="cutSheetW">展开纸宽(mm)</label>
+          <input id="cutSheetW" type="number" min="1" max="10000" value="420">
+        </div>
+        <div class="cutting-field">
+          <label for="cutSheetH">展开纸高(mm)</label>
+          <input id="cutSheetH" type="number" min="1" max="10000" value="297">
+        </div>
+        <div class="cutting-field">
+          <label for="cutFold">折线方向</label>
+          <select id="cutFold">
+            <option value="vertical">纵向（沿纸高）</option>
+            <option value="horizontal">横向（沿纸宽）</option>
+          </select>
+        </div>
+        <div class="cutting-field">
+          <label for="cutTrim">修边量(mm)</label>
+          <input id="cutTrim" type="number" min="0" max="10000" value="3">
+        </div>
+        <div class="cutting-field">
+          <label for="cutKerf">刀缝(mm)</label>
+          <input id="cutKerf" type="number" min="0" max="10000" value="2">
+        </div>
+      </div>
+
+      <div class="cutting-stock-head">
+        <h3>原纸规格（1～6 种）</h3>
+        <button id="cutAddRow" type="button">+ 增加规格</button>
+      </div>
+      <div class="cutting-table-wrap">
+        <table class="cutting-table" id="cutStockTable">
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>宽(mm)</th>
+              <th>高(mm)</th>
+              <th>纸纹方向</th>
+              <th>库存(张)</th>
+              <th>单价(分/张)</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="cutStockBody"></tbody>
+        </table>
+      </div>
+
+      <div class="cutting-actions">
+        <button id="cutCalcBtn" class="primary" type="button" disabled>计算选配</button>
+        <button id="cutCsvBtn" type="button" disabled>导出 CSV</button>
+      </div>
+      <div id="cutInfo"></div>
+      <div id="cutResult"></div>
+    </section>
   </main>
 
   <script src="app.js"></script>

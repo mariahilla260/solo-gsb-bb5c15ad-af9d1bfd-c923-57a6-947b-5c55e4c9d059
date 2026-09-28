@@ -17,6 +17,7 @@ const {
   buildReprintRunCsv,
   comparePlateReuse,
 } = require('./src/imposition');
+const { planStockCutting, buildStockCuttingCsv } = require('./src/cutting');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -196,6 +197,36 @@ app.post('/api/reuse/compare', (req, res) => {
     return res.status(400).json({ error: result.error, errors: result.errors });
   }
   res.json(result);
+});
+
+/**
+ * 原纸开料选配：要求当前拼版通过服务端校验（结构非法或拼版有错即拒绝）；
+ * 枚举各规格两种正交摆放（仅折线平行纸纹者可用），按整行整列与修边 / 刀缝计算每张出数，
+ * 精确选取不超库存且覆盖需求的最低总价组合（再比超印、编号升序列用量字典序）。
+ */
+app.post('/api/cutting/plan', (req, res) => {
+  const plan = planStockCutting(req.body, validateImposition);
+  if (!plan) {
+    return res.status(400).json({ error: '拼版数据格式不正确' });
+  }
+  if (plan.error) {
+    return res.status(400).json({ error: plan.error, errors: plan.errors });
+  }
+  res.json(plan);
+});
+
+/** 原纸开料选配 CSV：内容与页面选配结果一致；输入非法、拼版有错或无选配方案时拒绝下载 */
+app.post('/api/cutting/csv', (req, res) => {
+  const result = buildStockCuttingCsv(req.body, validateImposition);
+  if (!result) {
+    return res.status(400).json({ error: '拼版数据格式不正确' });
+  }
+  if (result.error) {
+    return res.status(400).json({ error: result.error, errors: result.errors });
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="stock-cutting.csv"');
+  res.send(result.csv);
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

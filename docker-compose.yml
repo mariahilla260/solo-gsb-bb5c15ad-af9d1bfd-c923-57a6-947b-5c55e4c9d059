@@ -3,4 +3,9 @@ services:
     build: .
     ports:
       - "3000:3000"
+    # 如需改用其他端口，可设置容器内监听端口并同步端口映射，例如：
+    # environment:
+    #   PORT: "3001"
+    # ports:
+    #   - "3001:3001"
     restart: unless-stopped

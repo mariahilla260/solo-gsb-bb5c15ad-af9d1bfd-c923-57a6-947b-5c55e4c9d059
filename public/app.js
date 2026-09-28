@@ -40,6 +40,19 @@ const els = {
   baselineInfo: document.getElementById('baselineInfo'),
   reuseResult: document.getElementById('reuseResult'),
   reuseList: document.getElementById('reuseList'),
+  cutDemand: document.getElementById('cutDemand'),
+  cutPrintRun: document.getElementById('cutPrintRun'),
+  cutSheetW: document.getElementById('cutSheetW'),
+  cutSheetH: document.getElementById('cutSheetH'),
+  cutFold: document.getElementById('cutFold'),
+  cutTrim: document.getElementById('cutTrim'),
+  cutKerf: document.getElementById('cutKerf'),
+  cutAddRow: document.getElementById('cutAddRow'),
+  cutStockBody: document.getElementById('cutStockBody'),
+  cutCalcBtn: document.getElementById('cutCalcBtn'),
+  cutCsvBtn: document.getElementById('cutCsvBtn'),
+  cutInfo: document.getElementById('cutInfo'),
+  cutResult: document.getElementById('cutResult'),
   summary: document.getElementById('summary'),
   sheets: document.getElementById('sheets'),
   errors: document.getElementById('errors'),
@@ -66,6 +79,12 @@ let reprintData = null; // 最近一次成功的补印清单（用于控制补�
 let reprintRunData = null; // 最近一次成功的生产单 { plan, baseStateJson, baseInput }（拼版或输入变化后失效）
 let baseline = null; // 改版印版复用基线 { state, label, time }，仅存于当前浏览器会话
 let reuseData = null; // 最近一次复用比较结果 { result, baseStateJson }（当前拼版变化后失效）
+let cutRows = [ // 原纸录入行（页面表格的唯一数据源）
+  { code: 'A0', width: 889, height: 1194, grain: 'long', stock: 500, price: 12000 },
+  { code: 'B0', width: 787, height: 1092, grain: 'long', stock: 300, price: 9000 },
+];
+let cutPlan = null; // 最近一次选配结果 { plan, baseStateJson, baseInput }（拼版或输入变化后失效）
+let cutDemandTouched = false; // 需求量是否被手动改过（手动值优先，不随拼版自动覆盖）
 const BASELINE_STORAGE_KEY = 'plateReuseBaseline';
 
 async function api(path, body) {
@@ -219,6 +238,7 @@ function render() {
   updateModeUI();
   refreshReprintRun(); // 拼版内容可能已变化：旧生产单立即失效
   refreshReuse();
+  syncCutDemandDefault(); // 实体纸张数可能变化：刷新需求量缺省值并令旧选配失效
 }
 
 function renderSignature(g) {
@@ -726,6 +746,7 @@ function refreshReprint() {
   }
   refreshReprintRun();
   refreshReuse();
+  refreshCutting();
 }
 
 /* ---------- 补印生产单（按页份数核算） ---------- */
@@ -1052,6 +1073,282 @@ function refreshReuse() {
   }
 }
 
+/* ---------- 原纸开料选配 ---------- */
+
+/** 当前拼版实体纸张数 × 印量（需求量缺省值） */
+function defaultCutDemand() {
+  if (!state) return null;
+  const run = Number(els.cutPrintRun.value);
+  if (!Number.isInteger(run) || run < 1 || run > 10000) return null;
+  return state.sheetCount * run;
+}
+
+/** 生成 / 重置拼版后刷新需求量缺省值（用户已手动编辑过则保留其输入） */
+function syncCutDemandDefault() {
+  if (!state) return;
+  if (!cutDemandTouched) els.cutDemand.value = defaultCutDemand() ?? '';
+  refreshCutting();
+}
+
+/** 收集原纸录入表格数据 */
+function collectCutRows() {
+  return cutRows.map((r) => ({ ...r }));
+}
+
+/** 组装选配请求 */
+function cuttingPayload() {
+  return {
+    state,
+    demand: els.cutDemand.value.trim(),
+    printRun: els.cutPrintRun.value,
+    sheetWidth: els.cutSheetW.value,
+    sheetHeight: els.cutSheetH.value,
+    foldDirection: els.cutFold.value,
+    trim: els.cutTrim.value,
+    kerf: els.cutKerf.value,
+    stocks: collectCutRows(),
+  };
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
+/** 渲染原纸录入表格 */
+function renderCutRows() {
+  els.cutStockBody.innerHTML = '';
+  cutRows.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    const makeCell = (html) => {
+      const td = document.createElement('td');
+      td.innerHTML = html;
+      return td;
+    };
+    const codeInput = '<input class="cut-in-code" type="text" maxlength="20" autocomplete="off" value="' + escapeHtml(row.code) + '">';
+    const numInput = (cls, min, max, value) =>
+      `<input class="${cls}" type="number" min="${min}" max="${max}" value="${escapeHtml(value)}">`;
+    tr.append(
+      makeCell(codeInput),
+      makeCell(numInput('cut-in-width', 1, 10000, row.width)),
+      makeCell(numInput('cut-in-height', 1, 10000, row.height)),
+      makeCell(
+        '<select class="cut-in-grain">' +
+        `<option value="long"${row.grain === 'long' ? ' selected' : ''}>平行长边</option>` +
+        `<option value="short"${row.grain === 'short' ? ' selected' : ''}>平行短边</option>` +
+        '</select>'
+      ),
+      makeCell(numInput('cut-in-stock', 0, 1000, row.stock)),
+      makeCell(numInput('cut-in-price', 1, 1000000000, row.price)),
+      makeCell('<button type="button" class="cut-del">删除</button>')
+    );
+    tr.querySelector('.cut-in-code').addEventListener('input', (e) => {
+      cutRows[idx].code = e.target.value;
+      invalidateCutting('输入已修改，请重新点击「计算选配」。');
+    });
+    tr.querySelector('.cut-in-width').addEventListener('input', (e) => {
+      cutRows[idx].width = e.target.value;
+      invalidateCutting('输入已修改，请重新点击「计算选配」。');
+    });
+    tr.querySelector('.cut-in-height').addEventListener('input', (e) => {
+      cutRows[idx].height = e.target.value;
+      invalidateCutting('输入已修改，请重新点击「计算选配」。');
+    });
+    tr.querySelector('.cut-in-grain').addEventListener('change', (e) => {
+      cutRows[idx].grain = e.target.value;
+      invalidateCutting('输入已修改，请重新点击「计算选配」。');
+    });
+    tr.querySelector('.cut-in-stock').addEventListener('input', (e) => {
+      cutRows[idx].stock = e.target.value;
+      invalidateCutting('输入已修改，请重新点击「计算选配」。');
+    });
+    tr.querySelector('.cut-in-price').addEventListener('input', (e) => {
+      cutRows[idx].price = e.target.value;
+      invalidateCutting('输入已修改，请重新点击「计算选配」。');
+    });
+    tr.querySelector('.cut-del').addEventListener('click', () => {
+      cutRows.splice(idx, 1);
+      renderCutRows();
+      invalidateCutting('原纸规格已修改，请重新点击「计算选配」。');
+    });
+    els.cutStockBody.appendChild(tr);
+  });
+  els.cutAddRow.disabled = cutRows.length >= 6;
+}
+
+/** 输入或拼版变化后使旧选配结果失效（清空结果、禁用 CSV） */
+function invalidateCutting(message) {
+  cutPlan = null;
+  els.cutCsvBtn.disabled = true;
+  if (state && message) {
+    els.cutResult.innerHTML = '';
+    els.cutInfo.innerHTML = '<p class="muted">' + escapeHtml(message) + '</p>';
+  } else {
+    els.cutInfo.innerHTML = state ? '' : '<p class="muted">请先生成拼版。</p>';
+    els.cutResult.innerHTML = '';
+  }
+}
+
+/** 拼版变化后同步选配区：拼版快照不同即令旧结果失效 */
+function refreshCutting() {
+  els.cutCalcBtn.disabled = !state;
+  if (!state) {
+    cutPlan = null;
+    els.cutCsvBtn.disabled = true;
+    els.cutInfo.innerHTML = '<p class="muted">请先生成拼版。</p>';
+    els.cutResult.innerHTML = '';
+    return;
+  }
+  if (cutPlan && JSON.stringify(state) !== cutPlan.baseStateJson) {
+    cutPlan = null;
+    els.cutCsvBtn.disabled = true;
+    els.cutResult.innerHTML = '';
+    els.cutInfo.innerHTML = '<p class="muted">拼版已变化，旧选配结果已失效，请重新点击「计算选配」。</p>';
+  }
+}
+
+function cutMessage(cls, text) {
+  els.cutInfo.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = cls;
+  p.textContent = text;
+  els.cutInfo.appendChild(p);
+}
+
+async function calcCutting() {
+  if (!state) {
+    cutMessage('muted', '请先生成拼版。');
+    return;
+  }
+  const payload = cuttingPayload();
+  try {
+    const data = await api('/api/cutting/plan', payload);
+    cutPlan = { plan: data, baseStateJson: JSON.stringify(state), baseInput: JSON.stringify(payload) };
+    renderCutting(data);
+    els.cutCsvBtn.disabled = !data.feasible;
+  } catch (e) {
+    cutPlan = null;
+    els.cutCsvBtn.disabled = true;
+    els.cutResult.innerHTML = '';
+    cutMessage('reprint-err', e.message);
+  }
+}
+
+function renderCutting(plan) {
+  els.cutInfo.innerHTML = '';
+  els.cutResult.innerHTML = '';
+
+  const headParts = [
+    `需求 ${plan.demand} 张（实体纸张 ${plan.sheetCount} 张` +
+      (plan.printRun != null ? ` × 印量 ${plan.printRun}` : '') + '）',
+    `展开 ${plan.sheetWidth}×${plan.sheetHeight} mm，${plan.foldLabel}`,
+    `修边 ${plan.trim} mm · 刀缝 ${plan.kerf} mm`,
+  ];
+  const head = document.createElement('p');
+  head.className = 'cut-head';
+  head.textContent = headParts.join('　｜　');
+  els.cutResult.appendChild(head);
+
+  if (!plan.feasible) {
+    const warn = document.createElement('p');
+    warn.className = 'reprint-err';
+    warn.textContent = `无选配方案：${plan.reason}`;
+    els.cutResult.appendChild(warn);
+  }
+
+  const table = document.createElement('table');
+  table.className = 'cut-result-table';
+  table.innerHTML =
+    '<thead><tr>' +
+    '<th>原纸编号</th><th>规格(mm)</th><th>纸纹</th><th>库存</th><th>摆放</th>' +
+    '<th>排布（每行×每列）</th><th>每张出数</th><th>领用量</th><th>实际出数</th>' +
+    '<th>单价(分)</th><th>金额(元)</th>' +
+    '</tr></thead>';
+  const tbody = document.createElement('tbody');
+  for (const s of plan.stocks) {
+    const tr = document.createElement('tr');
+    let placementText;
+    let layoutText;
+    if (s.feasiblePlacement) {
+      const chosen = s.placements.find((p) => p.name === s.feasiblePlacement);
+      placementText = s.feasiblePlacement === 'straight' ? '正向' : '旋转 90°';
+      layoutText = `${chosen.cols} × ${chosen.rows}`;
+    } else {
+      placementText = '不可用';
+      layoutText = '0 × 0';
+      tr.classList.add('cut-unusable');
+    }
+    const item = plan.feasible
+      ? plan.solution.items.find((it) => it.code === s.code)
+      : { used: 0, output: 0, costYuan: '0.00' };
+    const cells = [
+      s.code,
+      `${s.width}×${s.height}`,
+      s.grain === 'long' ? '长纹' : '短纹',
+      String(s.stock),
+      placementText,
+      layoutText,
+      String(s.perSheet),
+      String(item.used),
+      String(item.output),
+      String(s.price),
+      item.costYuan,
+    ];
+    for (const c of cells) {
+      const td = document.createElement('td');
+      td.textContent = c;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  els.cutResult.appendChild(table);
+
+  if (plan.feasible) {
+    const sol = plan.solution;
+    const sum = document.createElement('p');
+    sum.className = 'cut-summary';
+    sum.textContent =
+      `合计领用量 ${sol.totalUsedSheets} 张原纸 · 总出数 ${sol.totalOutput} 张` +
+      ` · 超印 ${sol.overprint} 张 · 总价 ${sol.totalCostYuan} 元（${sol.totalCost} 分）`;
+    els.cutResult.appendChild(sum);
+  }
+}
+
+/** 下载选配 CSV（与屏幕结果一致）；拼版或输入已变化、无选配方案时拒绝 */
+async function downloadCuttingCsv() {
+  if (!state || !cutPlan || !cutPlan.plan.feasible) return;
+  const payload = cuttingPayload();
+  if (
+    JSON.stringify(state) !== cutPlan.baseStateJson ||
+    JSON.stringify(payload) !== cutPlan.baseInput
+  ) {
+    refreshCutting();
+    alert('拼版或输入已变化，旧选配结果已失效，请重新计算选配。');
+    return;
+  }
+  const res = await fetch('/api/cutting/csv', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || '选配 CSV 下载失败');
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'stock-cutting.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /* ---------- 导出 ---------- */
 
 /** 下载结果文件（CSV / 打样 HTML）的通用逻辑 */
@@ -1158,8 +1455,34 @@ els.editModeBtn.addEventListener('click', () => {
   render();
 });
 
+/* 原纸开料选配 */
+els.cutCalcBtn.addEventListener('click', calcCutting);
+els.cutCsvBtn.addEventListener('click', downloadCuttingCsv);
+els.cutAddRow.addEventListener('click', () => {
+  if (cutRows.length >= 6) return;
+  cutRows.push({ code: '', width: 889, height: 1194, grain: 'long', stock: 0, price: 1 });
+  renderCutRows();
+  invalidateCutting('原纸规格已修改，请重新点击「计算选配」。');
+});
+els.cutPrintRun.addEventListener('input', () => {
+  // 印量变化只在需求量未被手动编辑时联动默认值
+  if (!cutDemandTouched) els.cutDemand.value = defaultCutDemand() ?? els.cutDemand.value;
+  invalidateCutting('输入已修改，请重新点击「计算选配」。');
+});
+els.cutDemand.addEventListener('input', () => {
+  // 只要手动编辑过需求量（即使之后清空）就保留手动优先，避免被默认值静默覆盖
+  cutDemandTouched = true;
+  invalidateCutting('输入已修改，请重新点击「计算选配」。');
+});
+for (const id of ['cutSheetW', 'cutSheetH', 'cutTrim', 'cutKerf']) {
+  els[id].addEventListener('input', () => invalidateCutting('输入已修改，请重新点击「计算选配」。'));
+}
+els.cutFold.addEventListener('change', () => invalidateCutting('输入已修改，请重新点击「计算选配」。'));
+
 setLayout('single');
 updateModeUI();
 loadBaseline();
 renderBaselineInfo();
 refreshReuse();
+renderCutRows();
+refreshCutting();
